@@ -1,4 +1,4 @@
-
+let a = 'b';
 var GridContainer = React.createClass({
     loadProducts: function() {
         //używamy biblioteki do obsługi json stream ( nie możemy uzyć $.getJSON() ponieważ api zwraca stream, nie http response)
