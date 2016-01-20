@@ -1,19 +1,28 @@
 let GridContainer = React.createClass({
     loadProducts: function() {
         //używamy biblioteki do obsługi json stream ( nie możemy uzyć $.getJSON() ponieważ api zwraca stream, nie http response)
-        let url = this.getProducstUrl();
-        let counter = 1;
-        let buffer = [];
-        oboe(this.getProducstUrl(this.state.buffer < this.state.limit ? 40: this.state.limit))
+        this.setState({loading: true})
+        let productsCount = !(this.state.buffer.length && this.state.products.length)?this.state.limit * 2 : this.state.limit;
+        if(this.state.buffer.length > 0) {
+            this.flushBuffer();
+        }
+        let counter = 0;
+        let localStore = [];
+        oboe(this.getProducstUrl(productsCount))
             .done((product) => {
-                if(this.state.products.length < this.state.limit) {
-                    let products = this.state.products.slice(0);
-                    products.push(product);
-                    this.setState({products: products, skip: this.state.skip+1});
-                } else {
+                counter++;
+                localStore.push(product);
+                if(localStore.length >= this.state.limit) {
+                    if(this.state.buffer.length > 0) {
+                        this.flushBuffer();
+                    }
                     let buffer = this.state.buffer.slice(0);
-                    buffer.push(product);
-                    this.setState({buffer: buffer, skip: this.state.skip+1});
+                    buffer.push.apply(buffer, localStore);
+                    this.setState({buffer: buffer, skip: this.state.skip+localStore.length});
+                    localStore = [];
+                }
+               if(counter >= productsCount) {
+                    this.setState({loading: false})
                 }
             })
             .fail((message) => {
@@ -21,32 +30,47 @@ let GridContainer = React.createClass({
                 this.setState({loading: false});
             });
     },
+    flushBuffer: function(){
+        let buffer = this.state.buffer.slice(0);
+        let products = this.state.products.slice(0);
+        products.push.apply(products, buffer);
+        products.push({type: 'image', adNumber: this.getUniqueRandomImageNumber()});
+        this.setState({products: products, buffer: [], loading: false});
+    },
     getProducstUrl: function(limit) {
-        return this.props.url + $.param({limit: undefined != limit? limit: this.state.limit, skip: this.state.skip})
+        return this.props.url + $.param({limit: undefined != limit? limit: this.state.limit, skip: this.state.skip, sort: this.state.sort});
     },
     getInitialState: function() {
-        return {products: [], buffer: [], skip: 0, limit: 20, loading: false, };
+        return {products: [], buffer: [], skip: 0, limit: 20, loading: false, isVisibilityCheckerVisible: false, sort: 'size'};
     },
     componentDidMount: function() {
-        this.loadProducts();
+        this.imageNumbers = [];
+        for(let i = 0; i <=1000; i++){
+            this.imageNumbers.push(i);
+        }
+    },
+    getUniqueRandomImageNumber: function() {
+        let randomNumber = Math.floor(Math.random() * this.imageNumbers.length);
+        return this.imageNumbers.splice(randomNumber, randomNumber+1)[0];
     },
     visibilityCheckerChangeHandler: function(visible) {
-        if(true == visible && this.state.products >= this.state.limit && this.state.loading == false){
-            this.setState({loading: true});
-            if(this.state.buffer > 0){
-                let products = Object.create({}, this.state.products, this.state.buffer.slice(0, this.state.limit));
-                this.setState({products:products, loading: false});
-                
-            }
+        if(false == this.state.isVisibilityCheckerVisible  && true == visible) {
+            this.setState({isVisibilityCheckerVisible: true});
             this.loadProducts();
+        } else if(true == this.state.isVisibilityCheckerVisible && false == visible) {
+            this.setState({isVisibilityCheckerVisible: false});
         }
     },
     render: function() {
         return(
             <div>
+
                 <table className="table">
                     <thead>
                     <tr>
+                        <th>
+                            Id
+                        </th>
                         <th>
                             Size
                         </th>
@@ -59,27 +83,36 @@ let GridContainer = React.createClass({
                     </tr>
                     </thead>
                     <tbody>
-                        {this.state.products.length && this.state.products.map(function(product){
+                        {this.state.products.length && this.state.products.map(function(product, index){
                             return (
                                 <GridItem key={product.id} data={product} />
                             );
                         })}
+
                     </tbody>
                 </table>
-                {this.state.products.length >=20 && <ViewPortVisibilityChecker onVisibilityChange={this.visibilityCheckerChangeHandler} />}
+                <ViewPortVisibilityChecker onVisibilityChange={this.visibilityCheckerChangeHandler} />
             </div>
         );
     }
 });
 let GridItem = React.createClass({
     render: function(){
-        return (
-            <tr>
-                <td>{this.props.data.size}</td>
-                <td>{this.props.data.price}</td>
-                <td>{this.props.data.face}</td>
-            </tr>
-        );
+        if(this.props.data.type == 'image'){
+            return (
+                <AddvertComponent key={this.props.key} adNumber={this.props.data.adNumber} />
+            );
+        } else {
+            return (
+                <tr>
+                    <td>{this.props.data.id}</td>
+                    <td>{this.props.data.size}</td>
+                    <td>{"$" + this.props.data.price / 100}</td>
+                    <td><font size={this.props.data.size}>{this.props.data.face}</font></td>
+                </tr>
+            );
+        }
+
     }
 });
 
@@ -95,7 +128,6 @@ let ViewPortVisibilityChecker = React.createClass({
         );
     },
     getInitialState: function() {
-        
         return {visibility: false};
     },
     checkIsElementVisible: function() {
@@ -113,10 +145,23 @@ let ViewPortVisibilityChecker = React.createClass({
         $(window).off('DOMContentLoaded load resize scroll', this.checkIsElementVisible);
     },
     render: function() {
-        return <span ref="element">&nbsp;</span>;
+        return (
+            <span ref="element">&nbsp;{this.state.visibility && <span><i className="fa fa-spinner fa-spin"></i> <span>...Loading</span></span>}</span>
+        );
     }
-})
+});
+let AddvertComponent = React.createClass({
+        render: function(){
+            return (
+                <tr>
+                    <td colSpan="4">
+                        <img className="ad" src={'/ad/?r=' + this.props.adNumber} alt="" />
+                    </td>
+                </tr>
+            );
+        }
+});
 ReactDOM.render(
-    <GridContainer url="https://worktest-jmatyja.c9users.io:8080/api/products?" />,
+    <GridContainer url="http://localhost:8000/api/products?" />,
     document.getElementById('products')
 );
