@@ -1,6 +1,5 @@
 let GridContainer = React.createClass({
     loadProducts: function() {
-        //używamy biblioteki do obsługi json stream ( nie możemy uzyć $.getJSON() ponieważ api zwraca stream, nie http response)
         this.setState({loading: true})
         let productsCount = !(this.state.buffer.length && this.state.products.length)?this.state.limit * 2 : this.state.limit;
         if(this.state.buffer.length > 0) {
@@ -8,6 +7,7 @@ let GridContainer = React.createClass({
         }
         let counter = 0;
         let localStore = [];
+         //używamy biblioteki do obsługi json stream ( nie możemy uzyć $.getJSON() ponieważ api zwraca stream, nie http response)
         oboe(this.getProducstUrl(productsCount))
             .done((product) => {
                 counter++;
@@ -26,8 +26,9 @@ let GridContainer = React.createClass({
                 }
             })
             .fail((message) => {
-                console.log("Error while downloading products");
-                this.setState({loading: false});
+                console.log(message);
+                //this.flushBuffer();
+                //this.setState({loading: false, catalogEnd: true});
             });
     },
     flushBuffer: function(){
@@ -39,9 +40,18 @@ let GridContainer = React.createClass({
     },
     getProducstUrl: function(limit) {
         return this.props.url + $.param({limit: undefined != limit? limit: this.state.limit, skip: this.state.skip, sort: this.state.sort});
-    },
+    }, 
     getInitialState: function() {
-        return {products: [], buffer: [], skip: 0, limit: 20, loading: false, isVisibilityCheckerVisible: false, sort: 'size'};
+        return {
+            products: [], 
+            buffer: [], 
+            skip: 0, 
+            limit: 20, 
+            loading: false, 
+            isVisibilityCheckerVisible: false, 
+            sort: 'id', 
+            catalogEnd: false
+        };
     },
     componentDidMount: function() {
         this.imageNumbers = [];
@@ -54,11 +64,20 @@ let GridContainer = React.createClass({
         return this.imageNumbers.splice(randomNumber, randomNumber+1)[0];
     },
     visibilityCheckerChangeHandler: function(visible) {
+        if(this.state.catalogEnd == true){
+            return;
+        }
         if(false == this.state.isVisibilityCheckerVisible  && true == visible) {
             this.setState({isVisibilityCheckerVisible: true});
             this.loadProducts();
         } else if(true == this.state.isVisibilityCheckerVisible && false == visible) {
             this.setState({isVisibilityCheckerVisible: false});
+        }
+    },
+    setSortColumn: function(column){
+        if(this.state.sort != column){
+            this.setState({products: [], buffer: [], skip: 0, loading: false, catalogEnd: false, sort: column});
+            this.loadProducts();
         }
     },
     render: function() {
@@ -69,13 +88,16 @@ let GridContainer = React.createClass({
                     <thead>
                     <tr>
                         <th>
-                            Id
+                             <a href="#" onClick={this.setSortColumn('id')}>{this.state.sort == 'id' &&<i className="fa fa-fw fa-sort"></i>}Id</a>
+                            
                         </th>
                         <th>
-                            Size
+                             <a href="#" onClick={this.setSortColumn('size')}>{this.state.sort == 'size' &&<i className="fa fa-fw fa-sort"></i>}Size</a>
+                            
                         </th>
                         <th>
-                            Price
+                            <a href="#" onClick={this.setSortColumn('price')}>{this.state.sort == 'price' && <i className="fa fa-fw fa-sort"></i>}Price</a>
+                            
                         </th>
                         <th>
                             Face
@@ -92,6 +114,7 @@ let GridContainer = React.createClass({
                     </tbody>
                 </table>
                 <ViewPortVisibilityChecker onVisibilityChange={this.visibilityCheckerChangeHandler} />
+                {this.state.catalogEnd && <span>End of catalogue</span>}
             </div>
         );
     }
@@ -162,6 +185,6 @@ let AddvertComponent = React.createClass({
         }
 });
 ReactDOM.render(
-    <GridContainer url="http://localhost:8000/api/products?" />,
+    <GridContainer url="https://worktest-jmatyja.c9users.io:8080/api/products?" />,
     document.getElementById('products')
 );
